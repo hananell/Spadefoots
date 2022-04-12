@@ -6,3 +6,5 @@ I have trained a yolov5x model on about 5000 images of spadefoots (5000 was nece
 1. Detect spadefoots using the model.
 2. Detect movements, defined as any change between the images.
 3. If there is an overlap - a spadefoot has moved.
+
+Images and model weights are not here as they are too big.
