@@ -4,10 +4,15 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 from PIL import Image
 from tqdm import tqdm
+import xlwt
+from xlwt import Workbook
+import shutil
 
 from movements import detect_movements
 from spadefoots import detect_spadefoots
 
+data_dir = 'data2'
+results_dir = 'results'
 month_dict = {
     'January': 1,
     'February': 2,
@@ -56,13 +61,14 @@ def iou(boxA, boxB):
     boxBArea = (boxB[2] - boxB[0] + 1) * (boxB[3] - boxB[1] + 1)
     # compute the intersection over union by taking the intersection
     # area and dividing it by the sum of prediction + ground-truth
-    # areas - the interesection area
+    # areas - the intersection area
     iou = interArea / float(boxAArea + boxBArea - interArea)
     # return the intersection over union value
     return iou
 
 
-# draw spadefoots in red, previous regions of spadefoots in blue, movements in green. save image to with_movements or without_movements
+# draw spadefoots in red, previous regions of spadefoots in blue, movements in green. save image to with_movements or without_movements.
+# return true if a spadefoot has moved, else false
 def draw_save(imgfile, spadefoots_prev, spadefoots_cur, movements):
     # init image
     img = Image.open(imgfile)
@@ -104,9 +110,13 @@ def draw_save(imgfile, spadefoots_prev, spadefoots_cur, movements):
             if iou(spadefoot, movement) > 0.05:
                 dest = 'with_movements'
 
-    plt.savefig(f"{dest}/{imgfile[6:].replace('/', '_')}")
+    # save image to its place in results
+    plt.savefig(f"{results_dir}/{camera[camera.index('/')+1:].replace('/', '_')}/{dest}/{imgfile[6:].replace('/', '_')}")
     plt.close()
     plt.close(figi)
+
+    return True if dest == 'with_movements' else False
+
 
 
 # return timestamp of a given image, for sorting
@@ -141,26 +151,66 @@ def timestamp_image(imgFile):
         return (0, 0, 0, 0, 0, os.path.getmtime(imgFile))
 
 
+# init dirs and xls file for saving results
+def init_results():
+    # make dirs
+    if os.path.isdir(f'{results_dir}'):
+        shutil.rmtree(f'{results_dir}')
+    os.mkdir('results')
+    for camera in glob(f'{data_dir}/comp*/camera*'):
+        os.mkdir(f"{results_dir}/{camera[camera.index('/')+1:].replace('/', '_')}")
+        os.mkdir(f"{results_dir}/{camera[camera.index('/')+1:].replace('/', '_')}/with_movements")
+        os.mkdir(f"{results_dir}/{camera[camera.index('/')+1:].replace('/', '_')}/without_movements")
+
+    # make xls file
+    wb = Workbook()
+    sheet1 = wb.add_sheet('Sheet 1')
+    bold = xlwt.easyxf('font: bold 1')
+    for i, camera in enumerate(glob(f'{data_dir}/comp*/camera*')):
+        sheet1.write(0, 2 * i, f"{camera[camera.index('/')+1:]} with_movements", bold)
+        sheet1.write(0, 2 * i + 1, f"{camera[camera.index('/')+1:]} without_movements", bold)
+    return wb, sheet1
+
+
 if __name__ == "__main__":
-    for camera in glob('data/comp*/camera*'):
-        # if 'Shenzi' not in camera:
-        #     continue
+    wb, sheet = init_results()
+
+    for camera_ind, camera in enumerate(glob(f'{data_dir}/comp*/camera*')):
+        with_movements_count, without_movements_count = 0, 0   # line to write in xls file
 
         # make sorted list of images, and make them full address
         images = sorted(os.listdir(camera), key=lambda img: timestamp_image(f"{camera}/{img}"))
         images = [f"{camera}/{img}" for img in images]
 
-        # treat first two images separately, to draw_save the first
+        # treat first image separately, comparing it to next image for movements instead of previous one
         img1, img2 = images[0], images[1]
         movements = detect_movements(img1, img2)
-        spadefoots1, spadefoots2 = detect_spadefoots(img1), detect_spadefoots(img2)
-        draw_save(img1, [], spadefoots1, movements)
-        draw_save(img2, spadefoots1, spadefoots2, movements)
+        spadefoots2 = detect_spadefoots(img1)   # name is spadefoots2 so in the next iteration it will be taken as previous detections
+        img1_result = draw_save(img1, [], spadefoots2, movements)
+        column = camera_ind*2 if img1_result else camera_ind*2+1
+        if img1_result:
+            with_movements_count += 1
+        else:
+            without_movements_count += 1
+        line = with_movements_count if img1_result else without_movements_count
+
+        sheet.write(line, column, os.path.basename(img1))
+
 
         # for each two images: detect movements, detect spadefoots, draw_save the second. if there is any overlapping it will get saved into with_movements
-        for i in tqdm(range(1, len(images) - 1), postfix=camera):
-            img1, img2 = images[i], images[i + 1]
+        for img_ind in tqdm(range(len(images) - 1), postfix=camera[camera.index('/') + 1:]):
+            img1, img2 = images[img_ind], images[img_ind + 1]
             movements = detect_movements(img1, img2)
             spadefoots1 = spadefoots2
             spadefoots2 = detect_spadefoots(img2)
-            draw_save(img2, spadefoots1, spadefoots2, movements)
+            img2_result = draw_save(img2, spadefoots1, spadefoots2, movements)
+            column = camera_ind * 2 if img2_result else camera_ind * 2 + 1
+            if img2_result:
+                with_movements_count += 1
+            else:
+                without_movements_count += 1
+            line = with_movements_count if img2_result else without_movements_count
+            sheet.write(line, column, os.path.basename(img2))    # +2 because 0 is title and 1 is taken by first image
+
+
+    wb.save(f'{results_dir}/results.xls')

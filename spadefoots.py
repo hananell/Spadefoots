@@ -6,7 +6,7 @@ from PIL import Image
 import torchvision
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-model = torch.hub.load('ultralytics/yolov5', 'custom', path="best_spadefoots4.pt").to(device).eval()
+model = torch.hub.load('ultralytics/yolov5', 'custom', path="best_spadefoots5.pt").to(device).eval()
 
 
 # from yolov5 repository
