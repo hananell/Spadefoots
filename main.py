@@ -11,7 +11,7 @@ import shutil
 from movements import detect_movements
 from spadefoots import detect_spadefoots
 
-data_dir = 'data2'
+data_dir = 'data'
 results_dir = 'results'
 month_dict = {
     'January': 1,
@@ -111,12 +111,26 @@ def draw_save(imgfile, spadefoots_prev, spadefoots_cur, movements):
                 dest = 'with_movements'
 
     # save image to its place in results
-    plt.savefig(f"{results_dir}/{camera[camera.index('/')+1:].replace('/', '_')}/{dest}/{imgfile[6:].replace('/', '_')}")
+    plt.savefig(f"{results_dir}/{camera[camera.index('/') + 1:].replace('/', '_')}/{dest}/{imgfile[imgfile.index('Snap'):]}")
     plt.close()
     plt.close(figi)
 
     return True if dest == 'with_movements' else False
 
+
+def just_save(imgfile, spadefoots_prev, spadefoots_cur, movements):
+    # default destination is without_movements. change if there is an overlapping of a spadefoot and a movement
+    dest = 'without_movements'
+    for spadefoot in spadefoots_prev + spadefoots_cur:
+        for movement in movements:
+            if iou(spadefoot, movement) > 0.05:
+                dest = 'with_movements'
+
+    # save image to its place in results
+    n = f"{results_dir}/{camera[camera.index('/') + 1:].replace('/', '_')}/{dest}/{imgfile[imgfile.index('Snap'):]}"
+    shutil.copy2(imgfile, f"{results_dir}/{camera[camera.index('/') + 1:].replace('/', '_')}/{dest}/{imgfile[imgfile.index('Snap'):]}")
+
+    return True if dest == 'with_movements' else False
 
 
 # return timestamp of a given image, for sorting
@@ -158,17 +172,17 @@ def init_results():
         shutil.rmtree(f'{results_dir}')
     os.mkdir('results')
     for camera in glob(f'{data_dir}/comp*/camera*'):
-        os.mkdir(f"{results_dir}/{camera[camera.index('/')+1:].replace('/', '_')}")
-        os.mkdir(f"{results_dir}/{camera[camera.index('/')+1:].replace('/', '_')}/with_movements")
-        os.mkdir(f"{results_dir}/{camera[camera.index('/')+1:].replace('/', '_')}/without_movements")
+        os.mkdir(f"{results_dir}/{camera[camera.index('/') + 1:].replace('/', '_')}")
+        os.mkdir(f"{results_dir}/{camera[camera.index('/') + 1:].replace('/', '_')}/with_movements")
+        os.mkdir(f"{results_dir}/{camera[camera.index('/') + 1:].replace('/', '_')}/without_movements")
 
     # make xls file
     wb = Workbook()
     sheet1 = wb.add_sheet('Sheet 1')
     bold = xlwt.easyxf('font: bold 1')
     for i, camera in enumerate(glob(f'{data_dir}/comp*/camera*')):
-        sheet1.write(0, 2 * i, f"{camera[camera.index('/')+1:]} with_movements", bold)
-        sheet1.write(0, 2 * i + 1, f"{camera[camera.index('/')+1:]} without_movements", bold)
+        sheet1.write(0, 2 * i, f"{camera[camera.index('/') + 1:]} with_movements", bold)
+        sheet1.write(0, 2 * i + 1, f"{camera[camera.index('/') + 1:]} without_movements", bold)
     return wb, sheet1
 
 
@@ -176,7 +190,7 @@ if __name__ == "__main__":
     wb, sheet = init_results()
 
     for camera_ind, camera in enumerate(glob(f'{data_dir}/comp*/camera*')):
-        with_movements_count, without_movements_count = 0, 0   # line to write in xls file
+        with_movements_count, without_movements_count = 0, 0  # line to write in xls file
 
         # make sorted list of images, and make them full address
         images = sorted(os.listdir(camera), key=lambda img: timestamp_image(f"{camera}/{img}"))
@@ -185,9 +199,9 @@ if __name__ == "__main__":
         # treat first image separately, comparing it to next image for movements instead of previous one
         img1, img2 = images[0], images[1]
         movements = detect_movements(img1, img2)
-        spadefoots2 = detect_spadefoots(img1)   # name is spadefoots2 so in the next iteration it will be taken as previous detections
+        spadefoots2 = detect_spadefoots(img1)  # name is spadefoots2 so in the next iteration it will be taken as previous detections
         img1_result = draw_save(img1, [], spadefoots2, movements)
-        column = camera_ind*2 if img1_result else camera_ind*2+1
+        column = camera_ind * 2 if img1_result else camera_ind * 2 + 1
         if img1_result:
             with_movements_count += 1
         else:
@@ -196,21 +210,19 @@ if __name__ == "__main__":
 
         sheet.write(line, column, os.path.basename(img1))
 
-
         # for each two images: detect movements, detect spadefoots, draw_save the second. if there is any overlapping it will get saved into with_movements
         for img_ind in tqdm(range(len(images) - 1), postfix=camera[camera.index('/') + 1:]):
             img1, img2 = images[img_ind], images[img_ind + 1]
             movements = detect_movements(img1, img2)
             spadefoots1 = spadefoots2
             spadefoots2 = detect_spadefoots(img2)
-            img2_result = draw_save(img2, spadefoots1, spadefoots2, movements)
+            img2_result = just_save(img2, spadefoots1, spadefoots2, movements)
             column = camera_ind * 2 if img2_result else camera_ind * 2 + 1
             if img2_result:
                 with_movements_count += 1
             else:
                 without_movements_count += 1
             line = with_movements_count if img2_result else without_movements_count
-            sheet.write(line, column, os.path.basename(img2))    # +2 because 0 is title and 1 is taken by first image
-
+            sheet.write(line, column, os.path.basename(img2))  # +2 because 0 is title and 1 is taken by first image
 
     wb.save(f'{results_dir}/results.xls')
