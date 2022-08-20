@@ -3,11 +3,13 @@
 import os
 import shutil
 
+results = 'results'
 truth = 'Carol_truth'
+
 truth_with_movements = os.listdir(f"{truth}/with_movements")
 truth_without_movements = os.listdir(f"{truth}/without_movements")
-pred_with_movements = os.listdir("results/with_movements")
-pred_without_movements = os.listdir("results/without_movements")
+pred_with_movements = os.listdir(f"{results}/with_movements")
+pred_without_movements = os.listdir(f"{results}/without_movements")
 
 TP, TN, FP, FN = [0] * 4
 

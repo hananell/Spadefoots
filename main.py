@@ -117,7 +117,7 @@ def draw_save(imgfile, spadefoots_prev, spadefoots_cur, movements):
 
     return True if dest == 'with_movements' else False
 
-
+# save image in destination without drawing rectangles
 def just_save(imgfile, spadefoots_prev, spadefoots_cur, movements):
     # default destination is without_movements. change if there is an overlapping of a spadefoot and a movement
     dest = 'without_movements'
@@ -134,6 +134,7 @@ def just_save(imgfile, spadefoots_prev, spadefoots_cur, movements):
 
 
 # return timestamp of a given image, for sorting
+# treat problematic names specially
 def timestamp_image(imgFile):
     try:
         tokens = os.path.basename(imgFile).split('.')[0].split(' ')
